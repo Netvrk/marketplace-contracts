@@ -1,12 +1,10 @@
 import { ethers } from "hardhat";
-import "@nomiclabs/hardhat-ethers";
 
 async function main() {
-  const NRGY = await ethers.getContractFactory("NRGY");
-  const nrgy = await NRGY.deploy();
+  const nrgyContract = await ethers.getContractFactory("NRGY");
+  const nrgy: any = await nrgyContract.deploy();
 
   await nrgy.deployed();
-
   console.log("NRGY deployed to:", nrgy.address);
 }
 

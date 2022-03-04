@@ -5,32 +5,40 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
-contract Axe is ERC721Enumerable, Ownable {
+contract Axe is ERC721Enumerable, Ownable, Pausable {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
 
     string internal _baseTokenURI;
 
-    constructor(string memory name, string memory symbol)
-        ERC721(name, symbol)
-    {}
+    constructor(
+        string memory name,
+        string memory symbol,
+        string memory baseTokenURI
+    ) ERC721(name, symbol) {
+        _baseTokenURI = baseTokenURI;
+    }
 
     // Mint game item
-    function mintItem(address player) public returns (uint256) {
-        _tokenIds.increment();
-        uint256 newItemId = _tokenIds.current();
-        _mint(player, newItemId);
-        return newItemId;
+    function mintItem(address player, uint256 itemId)
+        public
+        onlyOwner
+        returns (uint256)
+    {
+        _mint(player, itemId);
+        return itemId;
     }
 
     // Burn game item
-    function burnItem(uint256 itemId) public virtual {
+    function burnItem(uint256 itemId) public onlyOwner returns (uint256) {
         require(
             _isApprovedOrOwner(_msgSender(), itemId),
             "Caller is not owner nor approved"
         );
         _burn(itemId);
+        return itemId;
     }
 
     // Set base URI

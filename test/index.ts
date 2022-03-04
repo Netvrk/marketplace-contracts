@@ -1,19 +1,15 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-describe("Greeter", function () {
-  it("Should return the new greeting once it's changed", async function () {
-    const Greeter = await ethers.getContractFactory("Greeter");
-    const greeter = await Greeter.deploy("Hello, world!");
-    await greeter.deployed();
+describe("NRGY", function () {
+  it("Should deploy NRGY token", async function () {
+    const accounts = await ethers.getSigners();
+    const nrgyContract = await ethers.getContractFactory("NRGY");
+    const nrgy: any = await nrgyContract.deploy();
 
-    expect(await greeter.greet()).to.equal("Hello, world!");
+    await nrgy.deployed();
 
-    const setGreetingTx = await greeter.setGreeting("Hola, mundo!");
-
-    // wait until the transaction is mined
-    await setGreetingTx.wait();
-
-    expect(await greeter.greet()).to.equal("Hola, mundo!");
+    const ownerBalance = await nrgy.balanceOf(accounts[0].getAddress());
+    expect(ownerBalance).to.equal(await nrgy.totalSupply());
   });
 });
