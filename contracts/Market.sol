@@ -352,4 +352,8 @@ contract P2EMarketPlace is Ownable, Pausable {
             "INVALID_ERC721_IMPLEMENTATION"
         );
     }
+
+    function setPaused(bool _pause) external onlyOwner {
+        _paused = _pause;
+    }
 }
