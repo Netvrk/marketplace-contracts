@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
+import "./interfaces/IRoyaltiesManager.sol";
 
 contract P2EMarketPlace is Ownable, Pausable {
     using Address for address;
@@ -31,7 +32,9 @@ contract P2EMarketPlace is Ownable, Pausable {
     // Fees
     address public feesCollector;
     uint256 public feesCollectorCutPerMillion;
-    uint256 public publicationFeeInWei;
+
+    IRoyaltiesManager public royaltiesManager;
+    uint256 public royaltiesCutPerMillion;
 
     bytes4 public constant ERC721_INTERFACE = bytes4(0x80ac58cd);
 
@@ -62,11 +65,15 @@ contract P2EMarketPlace is Ownable, Pausable {
     );
 
     // Fee events
-    event ChangedPublicationFee(uint256 publicationFee);
     event ChangedFeesCollectorCutPerMillion(uint256 feesCollectorCutPerMillion);
     event FeesCollectorSet(
         address indexed oldFeesCollector,
         address indexed newFeesCollector
+    );
+    event ChangedRoyaltiesCutPerMillion(uint256 royaltiesCutPerMillion);
+    event RoyaltiesManagerSet(
+        IRoyaltiesManager indexed oldRoyaltiesManager,
+        IRoyaltiesManager indexed newRoyaltiesManager
     );
 
     /**
@@ -78,23 +85,20 @@ contract P2EMarketPlace is Ownable, Pausable {
     constructor(
         address _acceptedToken,
         address _feesCollector,
-        uint256 _feesCollectorCutPerMillion
+        uint256 _feesCollectorCutPerMillion,
+        IRoyaltiesManager _royaltiesManager,
+        uint256 _royaltiesCutPerMillion
     ) {
         require(_acceptedToken.isContract(), "INVALID_ACCEPTED_TOKEN");
         acceptedToken = IERC20(_acceptedToken);
+
         // Fee address init
         setFeesCollector(_feesCollector);
-        // Fee init
-        setFeesCollectorCutPerMillion(_feesCollectorCutPerMillion);
-    }
+        setRoyaltiesManager(_royaltiesManager);
 
-    /**
-     * @dev Sets the publication fee that's charged to users to publish items
-     * @param _publicationFee - Fee amount in wei this contract charges to publish an item
-     */
-    function setPublicationFee(uint256 _publicationFee) external onlyOwner {
-        publicationFeeInWei = _publicationFee;
-        emit ChangedPublicationFee(publicationFeeInWei);
+        // Fee init
+        setRoyaltiesCutPerMillion(_royaltiesCutPerMillion);
+        setFeesCollectorCutPerMillion(_feesCollectorCutPerMillion);
     }
 
     /**
@@ -117,6 +121,25 @@ contract P2EMarketPlace is Ownable, Pausable {
     }
 
     /**
+     * @dev Sets the share cut for the royalties that's
+     *  charged to the seller on a successful sale
+     * @param _royaltiesCutPerMillion - fees for royalties
+     */
+    function setRoyaltiesCutPerMillion(uint256 _royaltiesCutPerMillion)
+        public
+        onlyOwner
+    {
+        royaltiesCutPerMillion = _royaltiesCutPerMillion;
+
+        require(
+            feesCollectorCutPerMillion + royaltiesCutPerMillion < 1000000,
+            "TOTAL_FEES_MUST_BE_BETWEEN_0_AND_999999"
+        );
+
+        emit ChangedRoyaltiesCutPerMillion(royaltiesCutPerMillion);
+    }
+
+    /**
      * @notice Set the fees collector
      * @param _newFeesCollector - fees collector
      */
@@ -125,6 +148,23 @@ contract P2EMarketPlace is Ownable, Pausable {
 
         emit FeesCollectorSet(feesCollector, _newFeesCollector);
         feesCollector = _newFeesCollector;
+    }
+
+    /**
+     * @notice Set the royalties manager
+     * @param _newRoyaltiesManager - royalties manager
+     */
+    function setRoyaltiesManager(IRoyaltiesManager _newRoyaltiesManager)
+        public
+        onlyOwner
+    {
+        require(
+            address(_newRoyaltiesManager).isContract(),
+            "INVALID_ROYALTIES_MANAGER"
+        );
+
+        emit RoyaltiesManagerSet(royaltiesManager, _newRoyaltiesManager);
+        royaltiesManager = _newRoyaltiesManager;
     }
 
     /**
@@ -217,19 +257,6 @@ contract P2EMarketPlace is Ownable, Pausable {
             expiresAt: expiresAt
         });
 
-        // Check if there's a publication fee and
-        // transfer the amount to marketplace owner
-        if (publicationFeeInWei > 0) {
-            require(
-                acceptedToken.transferFrom(
-                    sender,
-                    feesCollector,
-                    publicationFeeInWei
-                ),
-                "TRANSFER_FAILED"
-            );
-        }
-
         emit OrderCreated(
             orderId,
             assetId,
@@ -301,21 +328,59 @@ contract P2EMarketPlace is Ownable, Pausable {
 
         delete orderByAssetId[nftAddress][assetId];
 
+        uint256 feesCollectorShareAmount;
+        uint256 royaltiesShareAmount;
+        address royaltiesReceiver;
+
+        // Royalties share
+        if (royaltiesCutPerMillion > 0) {
+            royaltiesShareAmount = (price * royaltiesCutPerMillion) / 1000000;
+
+            (bool success, bytes memory res) = address(royaltiesManager)
+                .staticcall(
+                    abi.encodeWithSelector(
+                        royaltiesManager.getRoyaltiesReceiver.selector,
+                        address(nftRegistry),
+                        assetId
+                    )
+                );
+
+            if (success) {
+                (royaltiesReceiver) = abi.decode(res, (address));
+                if (royaltiesReceiver != address(0)) {
+                    require(
+                        acceptedToken.transferFrom(
+                            sender,
+                            royaltiesReceiver,
+                            royaltiesShareAmount
+                        ),
+                        "TRANSFER_FEES_TO_ROYALTIES_RECEIVER_FAILED"
+                    );
+                }
+            }
+        }
+
         // Fees collector share
+        {
+            feesCollectorShareAmount =
+                (price * feesCollectorCutPerMillion) /
+                1000000;
+            uint256 totalFeeCollectorShareAmount = feesCollectorShareAmount;
 
-        uint256 feesCollectorShareAmount = (price *
-            feesCollectorCutPerMillion) / 1000000;
-        uint256 totalFeeCollectorShareAmount = feesCollectorShareAmount;
+            if (royaltiesShareAmount > 0 && royaltiesReceiver == address(0)) {
+                totalFeeCollectorShareAmount += royaltiesShareAmount;
+            }
 
-        if (totalFeeCollectorShareAmount > 0) {
-            require(
-                acceptedToken.transferFrom(
-                    sender,
-                    feesCollector,
-                    totalFeeCollectorShareAmount
-                ),
-                "TRANSFER_FEES_TO_COLLECTOR_ERROR"
-            );
+            if (totalFeeCollectorShareAmount > 0) {
+                require(
+                    acceptedToken.transferFrom(
+                        sender,
+                        feesCollector,
+                        totalFeeCollectorShareAmount
+                    ),
+                    "TRANSFER_FEES_TO_COLLECTOR_ERROR"
+                );
+            }
         }
 
         // Transfer sale amount to seller
@@ -323,7 +388,7 @@ contract P2EMarketPlace is Ownable, Pausable {
             acceptedToken.transferFrom(
                 sender,
                 order.seller,
-                price - feesCollectorShareAmount
+                price - royaltiesShareAmount - feesCollectorShareAmount
             ),
             "TRANSFER_AMOUNT_TO_SELLER_ERROR"
         );
@@ -353,7 +418,11 @@ contract P2EMarketPlace is Ownable, Pausable {
         );
     }
 
-    function setPaused(bool _pause) external onlyOwner {
-        _paused = _pause;
+    function setPaused(bool _contractPaused) external onlyOwner {
+        if (_contractPaused) {
+            _unpause();
+        } else {
+            _pause();
+        }
     }
 }
