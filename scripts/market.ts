@@ -1,7 +1,5 @@
-import { ethers } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
-import { RoyaltiesManager, RoyaltiesManager__factory } from "../typechain";
-import { RoyaltiesManagerInterface } from "../typechain/RoyaltiesManager";
+import { ethers, upgrades } from "hardhat";
 
 async function main() {
   const acceptedToken = "0x12381D72b130376a00C73658755ea621071787D6";
@@ -17,13 +15,19 @@ async function main() {
 
   const accounts = await ethers.getSigners();
 
-  const marketContract: any = await ethers.getContractFactory("P2EMarketPlace");
-  const market = await marketContract.deploy(
-    acceptedToken,
-    accounts[0].address,
-    2000, // 2%
-    royaltyManager.address,
-    10000 // 10 %
+  const marketContract: any = await ethers.getContractFactory("MarketPlace");
+  const market = await upgrades.deployProxy(
+    marketContract,
+    [
+      acceptedToken,
+      accounts[0].address,
+      2000, // 2%
+      royaltyManager.address,
+      10000, // 10 %
+    ],
+    {
+      kind: "uups",
+    }
   );
 
   await market.deployed();

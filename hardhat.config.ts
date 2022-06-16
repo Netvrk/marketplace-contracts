@@ -1,10 +1,11 @@
 import * as dotenv from "dotenv";
 
-import { HardhatUserConfig } from "hardhat/config";
 import "@nomiclabs/hardhat-etherscan";
 import "@nomiclabs/hardhat-waffle";
+import "@openzeppelin/hardhat-upgrades";
 import "@typechain/hardhat";
 import "hardhat-gas-reporter";
+import { HardhatUserConfig } from "hardhat/config";
 import "solidity-coverage";
 
 dotenv.config();
@@ -50,3 +51,4 @@ const config: HardhatUserConfig = {
 };
 
 export default config;
+

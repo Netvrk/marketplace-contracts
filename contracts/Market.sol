@@ -1,15 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./interfaces/IRoyaltiesManager.sol";
 
-contract P2EMarketPlace is Ownable, Pausable {
-    using Address for address;
+contract MarketPlace is
+    UUPSUpgradeable,
+    ContextUpgradeable,
+    OwnableUpgradeable,
+    PausableUpgradeable,
+    ReentrancyGuardUpgradeable
+{
+    using AddressUpgradeable for address;
 
     IERC20 public acceptedToken;
 
@@ -82,14 +92,21 @@ contract P2EMarketPlace is Ownable, Pausable {
      * @param _acceptedToken - Address of the ERC20 accepted for this marketplace
      * @param _feesCollectorCutPerMillion - fees collector cut per million
      */
-    constructor(
+    function initialize(
         address _acceptedToken,
         address _feesCollector,
         uint256 _feesCollectorCutPerMillion,
         IRoyaltiesManager _royaltiesManager,
         uint256 _royaltiesCutPerMillion
-    ) {
+    ) public initializer {
         require(_acceptedToken.isContract(), "INVALID_ACCEPTED_TOKEN");
+
+        __UUPSUpgradeable_init();
+        __Context_init_unchained();
+        __Ownable_init_unchained();
+        __Pausable_init_unchained();
+        __ReentrancyGuard_init_unchained();
+
         acceptedToken = IERC20(_acceptedToken);
 
         // Fee address init
@@ -179,7 +196,7 @@ contract P2EMarketPlace is Ownable, Pausable {
         uint256 assetId,
         uint256 priceInWei,
         uint256 expiresAt
-    ) public whenNotPaused {
+    ) public whenNotPaused nonReentrant {
         _createOrder(nftAddress, assetId, priceInWei, expiresAt);
     }
 
@@ -192,6 +209,7 @@ contract P2EMarketPlace is Ownable, Pausable {
     function cancelOrder(address nftAddress, uint256 assetId)
         public
         whenNotPaused
+        nonReentrant
     {
         _cancelOrder(nftAddress, assetId);
     }
@@ -206,7 +224,7 @@ contract P2EMarketPlace is Ownable, Pausable {
         address nftAddress,
         uint256 assetId,
         uint256 price
-    ) public whenNotPaused {
+    ) public whenNotPaused nonReentrant {
         _executeOrder(nftAddress, assetId, price);
     }
 
@@ -407,6 +425,9 @@ contract P2EMarketPlace is Ownable, Pausable {
 
         return order;
     }
+
+    // UUPS proxy function
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     function _requireERC721(address nftAddress) internal view {
         require(nftAddress.isContract(), "INVALID_NFT_ADDRESS");
