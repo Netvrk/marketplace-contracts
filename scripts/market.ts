@@ -2,7 +2,7 @@ import "@nomiclabs/hardhat-ethers";
 import { ethers, upgrades } from "hardhat";
 
 async function main() {
-  const acceptedToken = "0x12381D72b130376a00C73658755ea621071787D6";
+  const acceptedToken = "0x946803FAFa7cF519a163802cA44C17DE010E8cF7";
 
   const royaltyManagerContract = await ethers.getContractFactory(
     "RoyaltiesManager"

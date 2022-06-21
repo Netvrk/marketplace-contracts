@@ -13,3 +13,4 @@ describe("NRGY", function () {
     expect(ownerBalance).to.equal(await nrgy.totalSupply());
   });
 });
+
