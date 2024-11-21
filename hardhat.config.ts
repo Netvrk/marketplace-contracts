@@ -28,7 +28,7 @@ const config: HardhatUserConfig = {
       url: process.env.ROPSTEN_URL || "",
       accounts:
         process.env.PRIVATE_KEY_1 !== undefined &&
-        process.env.PRIVATE_KEY_2 !== undefined
+          process.env.PRIVATE_KEY_2 !== undefined
           ? [process.env.PRIVATE_KEY_1, process.env.PRIVATE_KEY_2]
           : [],
     },
@@ -36,7 +36,7 @@ const config: HardhatUserConfig = {
       url: process.env.MUMBAI_URL || "",
       accounts:
         process.env.PRIVATE_KEY_1 !== undefined &&
-        process.env.PRIVATE_KEY_2 !== undefined
+          process.env.PRIVATE_KEY_2 !== undefined
           ? [process.env.PRIVATE_KEY_1, process.env.PRIVATE_KEY_2]
           : [],
     },
